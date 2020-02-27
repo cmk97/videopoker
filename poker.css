@@ -1,0 +1,21 @@
+
+
+#game-container{
+	width: 800px;
+}
+
+.cards {
+	width: 100%;
+	display: flex;
+}
+
+.cards img {
+	width: 100%;
+	border: 1px solid black;
+}
+
+.card {
+	width: 15%;
+	float: left;
+	padding: 1rem;
+}
