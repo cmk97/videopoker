@@ -1,21 +1,68 @@
 
 
 #game-container{
-	width: 800px;
+	width: 100%;
+	background-color: rgb(7,56,176);
+}
+
+.component-container{
+	padding-top: 5px;
 }
 
 .cards {
 	width: 100%;
 	display: flex;
+	flex: 0 0 100%;
 }
 
 .cards img {
 	width: 100%;
 	border: 1px solid black;
+	background-color: white;
+	border-radius: 5px;
 }
 
 .card {
-	width: 15%;
-	float: left;
+	width: 20%; 
 	padding: 1rem;
+	display: block;
+}
+
+.hold {
+	color: white;
+	margin-bottom: 7px;
+	text-align: center;
+	font-family: sans-serif;
+	font-weight: bold;
+	visibility: hidden;
+}
+
+.hold:before {
+	content: "HOLD";
+}
+
+.game-component{
+	padding-top: 5px;
+	margin-left: 10px;
+	margin-right: 10px;
+}
+
+.pay-table{
+	margin-top: 1rem;
+	color: rgb(254,255,55);
+	border: 4px solid;
+	width: 100%;
+	border-collapse: collapse;
+	background-color: rgb(20,42,79);
+}
+
+.left-align{
+	text-align: left;
+}
+
+.payout-value {
+	color: rgb(254,255,55);
+	border-left: 4px solid;
+	border-right: 4px solid;
+	text-align: right;
 }
