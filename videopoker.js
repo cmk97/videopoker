@@ -82,10 +82,32 @@ POKER.Hand = POKER.Hand || (function(){
 		_this.cards = cards;
 		_this.holdIndexes = [];
 
-		function draw(){
+		this.draw = function(handsize, deck){
+			var heldCards = [];
+			for(var i = 0; i < _this.holdIndexes.length; i++){
+				heldCards.push(_this.cards[_this.holdIndexes[i]]);
+			}
+			var cards = deck.deal(handsize - heldCards.length);
+			
+			for(var i = 0, j = 0; i < _this.cards.length; i++){
+				if(!_this.holdIndexes.includes(i)){
+					updateCardImg(i, cards[j]);
+					j++;
+				}
+			}
+			_this.cards = heldCards.concat(cards);
+			console.log(_this.cards);
+			
+
 
 		}
 
+		function updateCardImg(index, card){
+			var cardDivs = document.getElementsByClassName("card");
+			var cardToUpdate = cardDivs[index];
+			var cardImg = cardToUpdate.getElementsByTagName("img")[0];
+			cardImg.src = ("assets/cards/" + card.value + "_of_" + card.suit + ".png");
+		}
 
 		function createCardElement(value, suit){
 			var cardElem = document.createElement("div");
@@ -104,17 +126,13 @@ POKER.Hand = POKER.Hand || (function(){
 		function holdCard(index){
 			var cards = document.querySelectorAll(".card");
 			if(_this.holdIndexes.includes(index)){
-				console.log("unholding..");
 				var i = _this.holdIndexes.indexOf(index);
 				_this.holdIndexes.splice(i, 1);
 				cards[index].firstElementChild.style.visibility = "hidden";
 			} else {
-				console.log("holding..");
 				_this.holdIndexes.push(index);
 				cards[index].firstElementChild.style.visibility = "visible";
-				console.log(cards[index].firstElementChild.style.visibility);
 			}
-			console.log(_this.holdIndexes);
 		}
 
 		function initializeCardContainer(){
@@ -124,7 +142,6 @@ POKER.Hand = POKER.Hand || (function(){
 				c.onclick = (function(index){
 					return function(e){
 						holdCard(index);
-
 					};
 				})(index)
 				document.getElementsByClassName("cards")[0].appendChild(c);
@@ -136,7 +153,21 @@ POKER.Hand = POKER.Hand || (function(){
 
 })();
 
-POKER.UI = {};
+POKER.UI = POKER.UI || (function(){
+
+	var BUTTONS = [
+		"OFF",
+		"MORE GAMES",
+		"OPTIONS",
+		"BET ONE",
+		"BET MAX",
+		"DEAL"
+	]
+
+	return {
+		BUTTONS: BUTTONS
+	}
+})();
 
 POKER.Ranks = POKER.Ranks || (function(){
 	var JACKS_OR_BETTER = {
@@ -160,12 +191,13 @@ POKER.Ranks = POKER.Ranks || (function(){
 POKER.Game = POKER.GAME || (function(){
 
 	var FIVE_CARD_DRAW = 5;
+	var onDraw = false;
+	var _this = this;
+	_this.hand, _this.deck;
 
 	function start(config){
 		POKER.Config = config;
 		setupGameContainer(config);
-		var deck = new POKER.Deck();
-		var hand = new POKER.Hand(deck.deal(FIVE_CARD_DRAW));
 
 	}
 
@@ -219,21 +251,49 @@ POKER.Game = POKER.GAME || (function(){
 
 	}
 
+	function createButtonBar(){
+		var gameComponent = createGameComponent();
+		var buttonBar = document.createElement("div");
+		buttonBar.className = "button-bar";
+		for(var i = 0; i < POKER.UI.BUTTONS.length; i++){
+			var button = document.createElement("button");
+			button.innerText = POKER.UI.BUTTONS[i];
+			buttonBar.appendChild(button);
+		}
+		gameComponent.appendChild(buttonBar);
+		return gameComponent;
+
+	}
+
+	function addDealEventListener(buttonBar){
+		var dealButton = buttonBar.getElementsByTagName("button")[5];
+		dealButton.onclick = function(){
+			if(onDraw){
+				_this.hand.draw(FIVE_CARD_DRAW,_this.deck);
+			} else {
+				_this.deck = new POKER.Deck();
+				_this.hand = new POKER.Hand(_this.deck.deal(FIVE_CARD_DRAW));
+				onDraw = true;
+			}
+
+		}
+	}
+
 	function setupGameContainer(config){
 		var gameContainer = document.getElementById(config['board']);
-
 		var componentContainer = createComponentContainer();
 
-
 		var cardContainer = createCardDisplay();
+		var buttonBar = createButtonBar();
 
 		gameContainer.appendChild(componentContainer);
 		componentContainer.appendChild(createPayTable());
-		componentContainer.appendChild(cardContainer)
+		componentContainer.appendChild(cardContainer);
+		componentContainer.appendChild(buttonBar);
 
 		POKER.UI['cardContainer'] = cardContainer;
-		console.log(POKER.Ranks.JACKS_OR_BETTER);
-		
+		POKER.UI['buttonBar'] = buttonBar;
+		addDealEventListener(buttonBar);
 	}
 
 	return {
