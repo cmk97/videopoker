@@ -93,8 +93,6 @@ POKER.Deck = POKER.Deck || (function() {
 
 POKER.HandAnalyzer = POKER.HandAnalyzer || (function(){
 
-
-
 	return function(cards){
 		var _this = this;
 		this.cards = cards;
@@ -106,6 +104,26 @@ POKER.HandAnalyzer = POKER.HandAnalyzer || (function(){
 			} else {
 				this.rankCount[cards[i].value]++;
 			}
+		}
+
+		function pairCount(){
+			var pairCount = 0;
+			for(const rank in _this.rankCount){
+				if(_this.rankCount[rank] === 2){
+					pairCount++;
+				}
+			}
+			return pairCount;
+		}
+
+		function highestRank(){
+			var ranks = Object.keys(_this.rankCount);
+			return Math.max(...ranks);
+		}
+
+		function lowestRank(){
+			var ranks = Object.keys(_this.rankCount);
+			return Math.min(...ranks);
 		}
 
 		function evalJacksOrBetter(){
@@ -120,14 +138,7 @@ POKER.HandAnalyzer = POKER.HandAnalyzer || (function(){
 		}
 
 		function evalTwoPair(){
-			var pairCount = 0;
-			for(const rank in _this.rankCount){
-				if(_this.rankCount[rank] === 2){
-					pairCount++;
-				}
-			}
-			if(pairCount === 2) return true;
-			return false;
+			return pairCount() === 2;
 		}
 
 		function evalThreeOfAKind(){
@@ -149,24 +160,74 @@ POKER.HandAnalyzer = POKER.HandAnalyzer || (function(){
 				}
 			}
 			// Find start of straight
-			var index = 0;
-			while(straight[index] === undefined) index++;
+			var index = lowestRank();
+
+			if(lowestRank() === POKER.RANKS.TWO &&
+			   highestRank() === POKER.RANKS.ACE){
+				index--;
+			}
+
 			// Count adjacent cards
 			var adjCards = 0;
 			while(straight[index] !== undefined && adjCards < 5){
 				adjCards++;
 				index++;
 			}
-			console.log(straight);
-			console.log(adjCards);	
 			return adjCards === 5;
 		}
 
-		console.log(this.rankCount);
-		console.log("Jacks or better: " + evalJacksOrBetter());
-		console.log("straight: " + evalStraight());
+		function evalFlush(){
+			var suit = _this.cards[0].suit;
+			for(var i = 1; i < _this.cards.length; i++){
+				if(_this.cards[i].suit !== suit) return false;
+			}
+			return true;
+		}
 
+		function evalFullHouse(){
+			return evalThreeOfAKind() && pairCount() === 1;
+		}
 
+		function evalFourOfAKind(){
+			var pairCount = 0;
+			for(const rank in _this.rankCount){
+				if(_this.rankCount[rank] === 4) return true;
+			}
+			return false;
+		}
+
+		function evalStraightFlush(){
+			return evalStraight() && evalFlush();
+		}
+
+		function evalRoyalFlush(){
+			return (evalStraight() && evalFlush() && lowestRank() === POKER.RANKS.TEN);
+		}
+
+		this.evaluate = function(){
+			var handEval = {
+				"PAIR": evalJacksOrBetter(),
+				"TWO PAIR": evalTwoPair(),
+				"THREE OF A KIND": evalThreeOfAKind(),
+				"STRAIGHT": evalStraight(),
+				"FLUSH": evalFlush(),
+				"FULL HOUSE": evalFullHouse(),
+				"FOUR OF A KIND": evalFourOfAKind(),
+				"STRAIGHT FLUSH": evalStraightFlush(),
+				"ROYAL FLUSH": evalRoyalFlush()
+			};
+	
+			for(const handMade in handEval){
+				if(handEval[handMade]){
+					return {
+						[handMade]: POKER.Payout.JACKS_OR_BETTER[handMade]
+					};
+				}
+			}
+			return {
+				"GAME OVER": 0
+			};
+		}
 	}
 
 })();
@@ -179,6 +240,8 @@ POKER.Hand = POKER.Hand || (function(){
 		_this.holdIndexes = [];
 
 		this.draw = function(handsize, deck){
+			//Return promise with this function. 
+
 			var heldCards = [];
 			for(var i = 0; i < _this.holdIndexes.length; i++){
 				heldCards.push(_this.cards[_this.holdIndexes[i]]);
@@ -188,13 +251,13 @@ POKER.Hand = POKER.Hand || (function(){
 			//Updated all cards not held 
 			for(var i = 0, j = 0; i < _this.cards.length; i++){
 				if(!_this.holdIndexes.includes(i)){
-					updateCardImg(i, cards[j]);
+					//updateCardImg(i, cards[j]);
 					_this.cards[i] = cards[j];
 					j++;
 				}
 			}
-			clearHoldLabels();
-			_this.holdIndexes = [];
+			updateCardImgWithDelay(0);
+			//clearHoldLabels();
 			// new hand
 		}
 
@@ -231,6 +294,7 @@ POKER.Hand = POKER.Hand || (function(){
 			var cardToUpdate = cardDivs[index];
 			var cardImg = cardToUpdate.getElementsByTagName("img")[0];
 			cardImg.src = ("assets/cards/" + card.value + "_of_" + card.suit + ".png");
+			cardDivs[index].onclick = handleCardHold(index);
 			return cardDivs[index];
 		}
 
@@ -253,7 +317,7 @@ POKER.Hand = POKER.Hand || (function(){
 			for(var i = 0; i < cardDivs.length; i++){
 				setHoldLabelVisibility(cardDivs[i], "hidden");
 			}
-			_this.holdIndexes = [];
+			//_this.holdIndexes = [];
 		}
 
 		function setHoldLabelVisibility(cardDiv, visibility){
@@ -278,13 +342,24 @@ POKER.Hand = POKER.Hand || (function(){
 			}
 		}
 
+		function updateCardImgWithDelay(index){
+			while(_this.holdIndexes.includes(index)) index++;
+			setTimeout(function(){
+				if(!_this.holdIndexes.includes(index)){
+					var c = updateCardImg(index, _this.cards[index]);
+					c.onclick = handleCardHold(index);
+				}
+				index++;
+				if(index < 5){
+					updateCardImgWithDelay(index);
+				}
+			}, 50);
+		}
+
 		function initializeCardContainer(){
-			for(var i = 0; i < _this.cards.length; i++){
-				var c = updateCardImg(i, _this.cards[i]);
-				var index = i;
-				c.onclick = handleCardHold(index);
-				//document.getElementsByClassName("cards")[0].appendChild(c);
-			}
+			var curIndex = 0;
+			
+			updateCardImgWithDelay(curIndex);
 		}
 
 		initializeCardContainer();
@@ -308,7 +383,7 @@ POKER.UI = POKER.UI || (function(){
 	}
 })();
 
-POKER.Ranks = POKER.Ranks || (function(){
+POKER.Payout = POKER.Payout || (function(){
 	var JACKS_OR_BETTER = {
 		"ROYAL FLUSH": 250,
 		"STRAIGHT FLUSH": 50,
@@ -361,17 +436,17 @@ POKER.Game = POKER.GAME || (function(){
 		payTable.appendChild(payTableBody);
 		
 		var MAX_BET = 5
-		for(const rank in POKER.Ranks.JACKS_OR_BETTER){
+		for(const payout in POKER.Payout.JACKS_OR_BETTER){
 			var row = document.createElement("tr");
-			var rankCol = document.createElement("td");
-			rankCol.innerText = rank;
-			rankCol.className = "left-align";
-			row.appendChild(rankCol);
+			var handMadeCol = document.createElement("td");
+			handMadeCol.innerText = payout;
+			handMadeCol.className = "left-align";
+			row.appendChild(handMadeCol);
 
 			for(var i = 1; i <= MAX_BET; i++){
 				var payCol = document.createElement("td");
 				payCol.className = "payout-value";
-				payCol.innerText = (POKER.Ranks.JACKS_OR_BETTER[rank] * i);
+				payCol.innerText = (POKER.Payout.JACKS_OR_BETTER[payout] * i);
 				row.appendChild(payCol);
 			}
 			payTableBody.appendChild(row);
@@ -380,6 +455,7 @@ POKER.Game = POKER.GAME || (function(){
 		component.appendChild(payTable)
 		return component;
 	}
+
 	
 	function createFlippedCardElement(){
 		var cardElem = document.createElement("div");
@@ -399,6 +475,7 @@ POKER.Game = POKER.GAME || (function(){
 		var component = createGameComponent();
 		var cardContainer = document.createElement("div")
 		cardContainer.className = "cards";
+		component.appendChild(createGameOverLabel());
 		component.appendChild(cardContainer);
 
 		for(var i = 0; i < FIVE_CARD_DRAW; i++){
@@ -408,6 +485,34 @@ POKER.Game = POKER.GAME || (function(){
 		}
 
 		return component;
+
+	}
+
+	function resetCardDisplay(){
+		var cardContainer = document.getElementsByClassName('cards')[0];
+		var cardImages = cardContainer.getElementsByTagName('img');
+		for(var i = 0; i < cardImages.length; i++){
+			cardImages[i].src = ("assets/cards/back.png");
+		}
+	}
+
+	function resetHoldLabels(){
+		var cardContainer = document.getElementsByClassName('cards')[0];
+		var holdLabels = cardContainer.getElementsByClassName('hold');
+		for(var i = 0; i < holdLabels.length; i++) {
+			holdLabels[i].style.visibility = 'hidden';
+		}
+
+	}
+	function resetWinningHandLabel(){
+		var winLabel = document.getElementById('winning-hand-label');
+		winLabel.innerHTML = "";
+	}
+
+	function resetGame(){
+		resetCardDisplay();
+		resetHoldLabels();
+		resetWinningHandLabel();
 
 	}
 
@@ -437,6 +542,21 @@ POKER.Game = POKER.GAME || (function(){
 
 	}
 
+	function createGameOverLabel(){
+		var winningHandLabel = document.createElement("div");
+		winningHandLabel.className = "game-text text-center";
+		winningHandLabel.id = "winning-hand-label";
+		winningHandLabel.style.minHeight = "30px";
+		winningHandLabel.style.marginBottom = "10px";
+		return winningHandLabel;
+
+	}
+
+	function handleGameOver(handResults){
+		var handLabel = document.getElementById("winning-hand-label");
+		handLabel.innerHTML = Object.keys(handResults)[0];
+	}
+
 	function addDealEventListener(buttonBar){
 		var dealButton = buttonBar.getElementsByTagName("button")[5];
 		dealButton.onclick = function(){
@@ -444,8 +564,15 @@ POKER.Game = POKER.GAME || (function(){
 				console.log("Drawing cards...");
 				_this.hand.draw(FIVE_CARD_DRAW, _this.deck);
 				_this.hand.logHandToConsole();
-				var ha = POKER.HandAnalyzer(_this.hand.cards);
+				var ha = new POKER.HandAnalyzer(_this.hand.cards);
+				console.log(ha);
+				var handData = ha.evaluate();
+				console.log('HAND DATA');
+				console.log(handData);
+				handleGameOver(handData);
+				onDraw = false;
 			} else {
+				resetGame();
 				_this.deck = new POKER.Deck();
 				_this.hand = new POKER.Hand(_this.deck.deal(FIVE_CARD_DRAW));
 				console.log("Dealing hand...");
@@ -455,6 +582,8 @@ POKER.Game = POKER.GAME || (function(){
 
 		}
 	}
+
+
 
 	function setupGameContainer(config){
 		var gameContainer = document.getElementById(config['board']);
