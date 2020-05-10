@@ -239,9 +239,8 @@ POKER.Hand = POKER.Hand || (function(){
 		_this.cards = cards;
 		_this.holdIndexes = [];
 
-		this.draw = function(handsize, deck){
+		this.draw = async function(handsize, deck){
 			//Return promise with this function. 
-
 			var heldCards = [];
 			for(var i = 0; i < _this.holdIndexes.length; i++){
 				heldCards.push(_this.cards[_this.holdIndexes[i]]);
@@ -251,14 +250,40 @@ POKER.Hand = POKER.Hand || (function(){
 			//Updated all cards not held 
 			for(var i = 0, j = 0; i < _this.cards.length; i++){
 				if(!_this.holdIndexes.includes(i)){
-					//updateCardImg(i, cards[j]);
 					_this.cards[i] = cards[j];
 					j++;
 				}
 			}
-			updateCardImgWithDelay(0);
-			//clearHoldLabels();
-			// new hand
+
+			await _this.updateCardContainer();
+			clearHoldLabels();
+		}
+
+		function dealCard(index){
+			return new Promise(function(resolve, reject){
+				setTimeout(() => {
+					updateCardImg(index, _this.cards[index]);
+					resolve(index);
+				}, 75);
+			});
+		}
+
+		function updateCardImgWithDelay(index){
+			return new Promise(function(resolve){
+				while(_this.holdIndexes.includes(index)) index++;
+			setTimeout(function(){
+				if(!_this.holdIndexes.includes(index)){
+					var c = updateCardImg(index, _this.cards[index]);
+					c.onclick = handleCardHold(index);
+				}
+				index++;
+				if(index < 5){
+					updateCardImgWithDelay(index);
+				} else {
+					resolve("Done!");
+				}
+			}, 500);
+			});
 		}
 
 		this.logHandToConsole = function(){
@@ -317,7 +342,7 @@ POKER.Hand = POKER.Hand || (function(){
 			for(var i = 0; i < cardDivs.length; i++){
 				setHoldLabelVisibility(cardDivs[i], "hidden");
 			}
-			//_this.holdIndexes = [];
+			_this.holdIndexes = [];
 		}
 
 		function setHoldLabelVisibility(cardDiv, visibility){
@@ -342,27 +367,13 @@ POKER.Hand = POKER.Hand || (function(){
 			}
 		}
 
-		function updateCardImgWithDelay(index){
-			while(_this.holdIndexes.includes(index)) index++;
-			setTimeout(function(){
-				if(!_this.holdIndexes.includes(index)){
-					var c = updateCardImg(index, _this.cards[index]);
-					c.onclick = handleCardHold(index);
-				}
-				index++;
-				if(index < 5){
-					updateCardImgWithDelay(index);
-				}
-			}, 50);
-		}
+		this.updateCardContainer = async function(){
 
-		function initializeCardContainer(){
-			var curIndex = 0;
-			
-			updateCardImgWithDelay(curIndex);
+			for(let i = 0; i < _this.cards.length; i++){
+				while(_this.holdIndexes.includes(i) && i < _this.cards.length-1) i++;
+				await dealCard(i);
+			}
 		}
-
-		initializeCardContainer();
 	}
 
 })();
@@ -552,32 +563,34 @@ POKER.Game = POKER.GAME || (function(){
 
 	}
 
-	function handleGameOver(handResults){
+	function handleGameOver(handResults, dealButton){
 		var handLabel = document.getElementById("winning-hand-label");
 		handLabel.innerHTML = Object.keys(handResults)[0];
+		dealButton.disabled = false;
 	}
 
 	function addDealEventListener(buttonBar){
 		var dealButton = buttonBar.getElementsByTagName("button")[5];
 		dealButton.onclick = function(){
 			if(onDraw){
-				console.log("Drawing cards...");
-				_this.hand.draw(FIVE_CARD_DRAW, _this.deck);
-				_this.hand.logHandToConsole();
-				var ha = new POKER.HandAnalyzer(_this.hand.cards);
-				console.log(ha);
-				var handData = ha.evaluate();
-				console.log('HAND DATA');
-				console.log(handData);
-				handleGameOver(handData);
-				onDraw = false;
+				dealButton.disabled = true;
+				_this.hand.draw(FIVE_CARD_DRAW, _this.deck, dealButton).then(function(cards){
+					var ha = new POKER.HandAnalyzer(_this.hand.cards);
+					var handData = ha.evaluate();
+					handleGameOver(handData, dealButton);
+					onDraw = false;
+				});
 			} else {
+				dealButton.disabled = true;
 				resetGame();
 				_this.deck = new POKER.Deck();
 				_this.hand = new POKER.Hand(_this.deck.deal(FIVE_CARD_DRAW));
-				console.log("Dealing hand...");
-				_this.hand.logHandToConsole();
-				onDraw = true;
+				_this.hand.updateCardContainer().then(function(){
+					console.log("Dealing hand...");
+					_this.hand.logHandToConsole();
+					onDraw = true;
+					dealButton.disabled = false;
+				});
 			}
 
 		}
