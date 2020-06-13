@@ -1,4 +1,9 @@
 
+.info{
+	color: white !important;
+	text-shadow: none !important;
+	font-size: large !important;
+}
 
 #game-container{
 	width: 100%;
