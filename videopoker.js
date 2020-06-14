@@ -205,27 +205,31 @@ POKER.HandAnalyzer = POKER.HandAnalyzer || (function(){
 		}
 
 		this.evaluate = function(){
-			var handEval = {
-				"PAIR": evalJacksOrBetter(),
-				"TWO PAIR": evalTwoPair(),
-				"THREE OF A KIND": evalThreeOfAKind(),
-				"STRAIGHT": evalStraight(),
-				"FLUSH": evalFlush(),
-				"FULL HOUSE": evalFullHouse(),
-				"FOUR OF A KIND": evalFourOfAKind(),
-				"STRAIGHT FLUSH": evalStraightFlush(),
-				"ROYAL FLUSH": evalRoyalFlush()
+			var handEvaluation = {
+				"ROYAL FLUSH": evalRoyalFlush,
+				"STRAIGHT FLUSH": evalStraightFlush,
+				"FOUR OF A KIND": evalFourOfAKind,
+				"FULL HOUSE": evalFullHouse,
+				"FLUSH": evalFlush,
+				"STRAIGHT": evalStraight,
+				"THREE OF A KIND": evalThreeOfAKind,
+				"TWO PAIR": evalTwoPair,
+				"PAIR": evalJacksOrBetter
 			};
 	
-			for(const handMade in handEval){
-				if(handEval[handMade]){
+			for(const hand in handEvaluation){
+				evalFunction = handEvaluation[hand];
+				var made = evalFunction();
+				if(made){
 					return {
-						[handMade]: POKER.Payout.JACKS_OR_BETTER[handMade]
+						handMade: hand,
+						payout: POKER.Payout.JACKS_OR_BETTER[hand],
 					};
 				}
 			}
 			return {
-				"GAME OVER": 0
+				hand: null,
+				payout: 0
 			};
 		}
 	}
@@ -415,10 +419,13 @@ POKER.Payout = POKER.Payout || (function(){
 
 POKER.PayTable = POKER.PayTable || (function(){
 	 MAX_COLUMN = 6;
+	 START_COLUMN = 1;
 
 	return function(config, container){
+		
 		var _this = this;
 		_this.container = container;
+
 		function createPayTable(){
 			// Initialize table
 			var payTable = document.createElement("table");
@@ -429,6 +436,7 @@ POKER.PayTable = POKER.PayTable || (function(){
 			//component.appendChild(payTable)
 			return payTable;
 		}
+
 
 		function initialize(){
 			var paytable = createPayTable();
@@ -466,6 +474,13 @@ POKER.PayTable = POKER.PayTable || (function(){
 
 		}
 
+		this.increaseBet = function(bet){
+			colorPaytableColumn(START_COLUMN + bet, 'red');
+			if(bet > 1){
+				colorPaytableColumn(START_COLUMN + bet - 1, 'rgb(20,42,79)')
+			}
+		}
+
 		function colorPaytableColumn(col, color){
 			var columnCells = document.querySelectorAll(`#pay-table-body tr > td:nth-child(${col})`);
 			for(var i = 0; i < columnCells.length; i++){
@@ -497,21 +512,37 @@ POKER.PayTable = POKER.PayTable || (function(){
 POKER.Player = POKER.Player || (function(){
 
 	DEFAULT_CREDITS = 100;
+	DEFAULT_BET = 0;
+	MAX_BET = 5;
 
-	return function(config, container){
+
+	return function(config, container, paytable){
 		var _this = this;
+		_this.currentBet = DEFAULT_BET;
 		_this.container = container;
-		_this.creditsLabel;
+		_this.paytable = paytable;
+		_this.credits = DEFAULT_CREDITS;
+		_this.creditsLabel, _this.betLabel;
 
-		function createButtonBar(){
+		BUTTONS = [
+			{label: "OFF", id: 'off-button', action: null},
+			{label: "MORE GAMES", id: 'more-games-button', action: null},
+			{label: "LOG", id: 'log-button', action: null},
+			{label: "BET ONE", id: 'bet-one-button', action: handleBetIncrease},
+			{label: "BET MAX", id: 'bet-max-button', action: null},
+			{label: "DEAL", id: 'deal-button', action: null}
+		]
+
+
+		function initializePlayerInfo(){
 			var component = document.createElement("div")
 			component.className = "game-component";
-
 			var playInfo = document.createElement("div");
 			playInfo.className = "play-info";
 			var betLabel = document.createElement("div");
 			betLabel.className = "game-text";
 			betLabel.id = "bet-label";
+			_this.betLabel = betLabel;
 			var creditsLabel = document.createElement("div");
 			creditsLabel.className = "game-text float-right";
 			creditsLabel.id = "credit-label";
@@ -519,13 +550,20 @@ POKER.Player = POKER.Player || (function(){
 			playInfo.appendChild(betLabel);
 			playInfo.appendChild(creditsLabel);
 			component.appendChild(playInfo);
+			_this.container.appendChild(component);
+		}
 
+		function initializeButtonBar(){
+			var component = document.createElement("div")
+			component.className = "game-component";
 			var buttonBar = document.createElement("div");
 			buttonBar.className = "button-bar";
 			buttonBar.id = "button-bar";
-			for(var i = 0; i < POKER.UI.BUTTONS.length; i++){
+			for(var i = 0; i < BUTTONS.length; i++){
 				var button = document.createElement("button");
-				button.innerText = POKER.UI.BUTTONS[i];
+				button.innerHTML = BUTTONS[i].label;
+				button.id = BUTTONS[i].id;
+				button.onclick = BUTTONS[i].action;
 				buttonBar.appendChild(button);
 			}
 			component.appendChild(buttonBar);
@@ -533,13 +571,27 @@ POKER.Player = POKER.Player || (function(){
 			_this.container.appendChild(component);
 		}
 
-		async function initialize(){
-			createButtonBar();
+		function initialize(){
+			initializePlayerInfo();
+			initializeButtonBar();
 			_this.creditsLabel.innerHTML = DEFAULT_CREDITS;
-			console.log('hello');
-			for(var i = 0; i < 5; i++){
+			_this.betLabel.innerHTML = DEFAULT_BET;
+			_this.betLabel.onclick = handleBetIncrease;
+		}
+
+		function handleBetIncrease(){
+			if(_this.currentBet < MAX_BET){
+				_this.currentBet += 1;
+				_this.betLabel.innerHTML = _this.currentBet;
+				console.log(_this.currentBet);
+				_this.paytable.increaseBet(_this.currentBet);
+			}
+		}
+
+		this.registerWinnings = async function(payout){
+			_this.credits += payout;
+			for(var i = 0; i < payout; i++){
 				await incrementCreditLabel();
-				console.log(i);
 			}
 		}
 
@@ -548,7 +600,8 @@ POKER.Player = POKER.Player || (function(){
 				setTimeout(() => {
 					var currentCredit = _this.creditsLabel.innerHTML;
 					_this.creditsLabel.innerHTML = parseInt(currentCredit) + 1;
-				}, 100);
+					resolve();
+				}, 75);
 			});
 		}
 
@@ -604,8 +657,8 @@ POKER.Game = POKER.GAME || (function(){
 		component.appendChild(cardContainer);
 
 		for(var i = 0; i < FIVE_CARD_DRAW; i++){
-				var c = createFlippedCardElement();
-				var index = i;
+			var c = createFlippedCardElement();
+			var index = i;
 			cardContainer.appendChild(c);
 		}
 
@@ -651,48 +704,49 @@ POKER.Game = POKER.GAME || (function(){
 
 	}
 
-	function handleGameOver(handResults, dealButton, gameOver){
+	function displayHandResults(handResults, dealButton, gameOver){
 		var handLabel = document.getElementById("winning-hand-label");
 		if(gameOver){
-			console.log("in game over...");
 			handLabel.classList.remove("info");
-			handLabel.innerHTML = Object.keys(handResults)[0];
+			if(handResults.handMade){
+				handLabel.innerHTML = handResults.handMade
+			} else {
+				handLabel.innerHTML = "GAME OVER"
+			}
 		} else {
 			handLabel.classList.add("info");
-			console.log(Object.keys(handResults));
-			console.log(Object.keys(handResults)[0] === "GAME OVER");
-			if(Object.keys(handResults)[0] !== "GAME OVER"){
+			if(handResults.handMade){
 				handLabel.innerHTML = Object.keys(handResults);
-
 			}
 		}
 		dealButton.disabled = false;
 	}
 
 	function addDealEventListener(dealButton){
-		
 		dealButton.onclick = function(){
 			if(onDraw){
 				dealButton.disabled = true;
-				_this.hand.draw(FIVE_CARD_DRAW, _this.deck, dealButton).then(function(cards){
+				_this.hand.draw(FIVE_CARD_DRAW, _this.deck, dealButton)
+				.then(function(cards){
 					var ha = new POKER.HandAnalyzer(_this.hand.cards);
 					var handData = ha.evaluate();
-					handleGameOver(handData, dealButton, onDraw);
+					displayHandResults(handData, dealButton, onDraw);
 					onDraw = false;
+					_this.player.registerWinnings(handData.payout);
 				});
 			} else {
 				dealButton.disabled = true;
 				resetGame();
 				_this.deck = new POKER.Deck();
 				_this.hand = new POKER.Hand(_this.deck.deal(FIVE_CARD_DRAW));
-				_this.paytable.displayBet(5)
+				_this.paytable.displayBet(_this.player.currentBet)
 				.then(function(){
 					_this.hand.updateCardContainer();
 				})
 				.then(function(){
 					var ha = new POKER.HandAnalyzer(_this.hand.cards);
 					var handmade = ha.evaluate();
-					handleGameOver(handmade, dealButton, onDraw);
+					displayHandResults(handmade, dealButton, onDraw);
 					onDraw = true;
 					dealButton.disabled = false;
 				});
@@ -712,7 +766,7 @@ POKER.Game = POKER.GAME || (function(){
 		gameContainer.appendChild(componentContainer);
 		_this.paytable = new POKER.PayTable(config, componentContainer);
 		componentContainer.appendChild(cardContainer);
-		_this.player = new POKER.Player(config, componentContainer);
+		_this.player = new POKER.Player(config, componentContainer, _this.paytable);
 
 		POKER.UI['cardContainer'] = cardContainer;
 		var buttonBar = document.getElementById('button-bar');
