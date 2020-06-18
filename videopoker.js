@@ -272,23 +272,6 @@ POKER.Hand = POKER.Hand || (function(){
 			});
 		}
 
-		function updateCardImgWithDelay(index){
-			return new Promise(function(resolve){
-				while(_this.holdIndexes.includes(index)) index++;
-			setTimeout(function(){
-				if(!_this.holdIndexes.includes(index)){
-					var c = updateCardImg(index, _this.cards[index]);
-					c.onclick = handleCardHold(index);
-				}
-				index++;
-				if(index < 5){
-					updateCardImgWithDelay(index);
-				} else {
-					resolve("Done!");
-				}
-			}, 500);
-			});
-		}
 
 		this.logHandToConsole = function(){
 			for(var i = 0; i < _this.cards.length; i++){
@@ -382,21 +365,21 @@ POKER.Hand = POKER.Hand || (function(){
 
 })();
 
-POKER.UI = POKER.UI || (function(){
+// POKER.UI = POKER.UI || (function(){
 
-	var BUTTONS = [
-		"OFF",
-		"MORE GAMES",
-		"OPTIONS",
-		"BET ONE",
-		"BET MAX",
-		"DEAL"
-	]
+// 	var BUTTONS = [
+// 		"OFF",
+// 		"MORE GAMES",
+// 		"OPTIONS",
+// 		"BET ONE",
+// 		"BET MAX",
+// 		"DEAL"
+// 	]
 
-	return {
-		BUTTONS: BUTTONS
-	}
-})();
+// 	return {
+// 		BUTTONS: BUTTONS
+// 	}
+// })();
 
 POKER.Payout = POKER.Payout || (function(){
 	var JACKS_OR_BETTER = {
@@ -433,7 +416,6 @@ POKER.PayTable = POKER.PayTable || (function(){
 			var payTableBody = document.createElement("tbody")
 			payTableBody.id = "pay-table-body"
 			payTable.appendChild(payTableBody);
-			//component.appendChild(payTable)
 			return payTable;
 		}
 
@@ -463,13 +445,14 @@ POKER.PayTable = POKER.PayTable || (function(){
 			_this.container.appendChild(component);
 		}
 
-		this.displayBet = async function(bet){
+		this.displayBet = async function(bet, decrementCredits){
 			// Clear last column from last hand
 			colorPaytableColumn(MAX_COLUMN, 'rgb(20,42,79)');
 
 			var startCol = 2;
 			for(var i = startCol; i < startCol + bet; i++){
 				await animatePaytableClimb(i);
+				decrementCredits()
 			}
 
 		}
@@ -518,11 +501,12 @@ POKER.Player = POKER.Player || (function(){
 
 	return function(config, container, paytable){
 		var _this = this;
+		var onDraw = false;
 		_this.currentBet = DEFAULT_BET;
 		_this.container = container;
 		_this.paytable = paytable;
 		_this.credits = DEFAULT_CREDITS;
-		_this.creditsLabel, _this.betLabel;
+		_this.creditsLabel, _this.betLabel, _this.hand, _this.deck, _this.paytable;
 
 		BUTTONS = [
 			{label: "OFF", id: 'off-button', action: null},
@@ -530,7 +514,7 @@ POKER.Player = POKER.Player || (function(){
 			{label: "LOG", id: 'log-button', action: null},
 			{label: "BET ONE", id: 'bet-one-button', action: handleBetIncrease},
 			{label: "BET MAX", id: 'bet-max-button', action: null},
-			{label: "DEAL", id: 'deal-button', action: null}
+			{label: "DEAL", id: 'deal-button', action: playGame}
 		]
 
 
@@ -583,16 +567,20 @@ POKER.Player = POKER.Player || (function(){
 			if(_this.currentBet < MAX_BET){
 				_this.currentBet += 1;
 				_this.betLabel.innerHTML = _this.currentBet;
-				console.log(_this.currentBet);
 				_this.paytable.increaseBet(_this.currentBet);
 			}
 		}
 
 		this.registerWinnings = async function(payout){
-			_this.credits += payout;
-			for(var i = 0; i < payout; i++){
+			_this.credits += (payout * _this.currentBet);
+			for(var i = 0; i < payout * _this.currentBet; i++){
 				await incrementCreditLabel();
 			}
+		}
+
+		this.placeBet = async function(){
+			_this.credits -= _this.currentBet;
+			await _this.paytable.displayBet(_this.currentBet, decrementCreditLabel);
 		}
 
 		function incrementCreditLabel(){
@@ -601,10 +589,92 @@ POKER.Player = POKER.Player || (function(){
 					var currentCredit = _this.creditsLabel.innerHTML;
 					_this.creditsLabel.innerHTML = parseInt(currentCredit) + 1;
 					resolve();
-				}, 75);
+				}, 50);
 			});
 		}
 
+		function decrementCreditLabel(){
+			var currentCredit = _this.creditsLabel.innerHTML;
+			_this.creditsLabel.innerHTML = parseInt(currentCredit) - 1;
+		}
+
+		function displayHandResults(handResults, gameOver){
+			console.log('Displaying hand results');
+			var handLabel = document.getElementById("winning-hand-label");
+			if(gameOver){
+				handLabel.classList.remove("info");
+				if(handResults.handMade){
+					handLabel.innerHTML = handResults.handMade
+				} else {
+					handLabel.innerHTML = "GAME OVER"
+				}
+			} else {
+				handLabel.classList.add("info");
+				if(handResults.handMade){
+					console.log('setting label');
+					handLabel.innerHTML = handResults.handMade;
+				}
+			}
+		}
+
+		function resetCardDisplay(){
+			var cardContainer = document.getElementsByClassName('cards')[0];
+			var cardImages = cardContainer.getElementsByTagName('img');
+			for(var i = 0; i < cardImages.length; i++){
+				cardImages[i].src = ("assets/cards/back.png");
+			}
+		}
+
+		function resetHoldLabels(){
+			var cardContainer = document.getElementsByClassName('cards')[0];
+			var holdLabels = cardContainer.getElementsByClassName('hold');
+			for(var i = 0; i < holdLabels.length; i++) {
+				holdLabels[i].style.visibility = 'hidden';
+			}
+		}
+
+		function resetWinningHandLabel(){
+			var winLabel = document.getElementById('winning-hand-label');
+			winLabel.innerHTML = "";
+		}
+
+		function resetGame(){
+			resetCardDisplay();
+			resetHoldLabels();
+			resetWinningHandLabel();
+
+		}
+
+		function playGame(){
+			console.log(onDraw);
+			if(!onDraw){
+				console.log('Drawing...');
+				resetGame();
+				_this.deck = new POKER.Deck();
+				_this.hand = new POKER.Hand(_this.deck.deal(5));
+				_this.placeBet()
+				.then(function(){
+					_this.hand.updateCardContainer();
+				})
+				.then(function(){
+					var ha = new POKER.HandAnalyzer(_this.hand.cards);
+					var handResult = ha.evaluate();
+					console.log(handResult);
+					displayHandResults(handResult, onDraw);
+					onDraw = true;
+				});
+			} else {
+				_this.hand.draw(5, _this.deck)
+				.then(function(){
+					var ha = new POKER.HandAnalyzer(_this.hand.cards);
+					var handResult = ha.evaluate();
+					console.log(handResult);
+					displayHandResults(handResult, onDraw);
+					onDraw = false;
+					_this.registerWinnings(handResult.payout);
+				});
+			}
+		}
 		initialize();
 	}
 })();
@@ -612,15 +682,9 @@ POKER.Player = POKER.Player || (function(){
 POKER.Game = POKER.GAME || (function(){
 
 	var FIVE_CARD_DRAW = 5;
-	var onDraw = false;
 	var _this = this;
-	_this.hand, _this.deck, _this.paytable;
+	_this.config;
 
-	function start(config){
-		POKER.Config = config;
-		setupGameContainer(config);
-
-	}
 
 	function createComponentContainer(){
 		var componentContainer = document.createElement("div")
@@ -666,34 +730,6 @@ POKER.Game = POKER.GAME || (function(){
 
 	}
 
-	function resetCardDisplay(){
-		var cardContainer = document.getElementsByClassName('cards')[0];
-		var cardImages = cardContainer.getElementsByTagName('img');
-		for(var i = 0; i < cardImages.length; i++){
-			cardImages[i].src = ("assets/cards/back.png");
-		}
-	}
-
-	function resetHoldLabels(){
-		var cardContainer = document.getElementsByClassName('cards')[0];
-		var holdLabels = cardContainer.getElementsByClassName('hold');
-		for(var i = 0; i < holdLabels.length; i++) {
-			holdLabels[i].style.visibility = 'hidden';
-		}
-
-	}
-	function resetWinningHandLabel(){
-		var winLabel = document.getElementById('winning-hand-label');
-		winLabel.innerHTML = "";
-	}
-
-	function resetGame(){
-		resetCardDisplay();
-		resetHoldLabels();
-		resetWinningHandLabel();
-
-	}
-
 	function createGameOverLabel(){
 		var winningHandLabel = document.createElement("div");
 		winningHandLabel.className = "game-text text-center";
@@ -704,74 +740,15 @@ POKER.Game = POKER.GAME || (function(){
 
 	}
 
-	function displayHandResults(handResults, dealButton, gameOver){
-		var handLabel = document.getElementById("winning-hand-label");
-		if(gameOver){
-			handLabel.classList.remove("info");
-			if(handResults.handMade){
-				handLabel.innerHTML = handResults.handMade
-			} else {
-				handLabel.innerHTML = "GAME OVER"
-			}
-		} else {
-			handLabel.classList.add("info");
-			if(handResults.handMade){
-				handLabel.innerHTML = Object.keys(handResults);
-			}
-		}
-		dealButton.disabled = false;
-	}
-
-	function addDealEventListener(dealButton){
-		dealButton.onclick = function(){
-			if(onDraw){
-				dealButton.disabled = true;
-				_this.hand.draw(FIVE_CARD_DRAW, _this.deck, dealButton)
-				.then(function(cards){
-					var ha = new POKER.HandAnalyzer(_this.hand.cards);
-					var handData = ha.evaluate();
-					displayHandResults(handData, dealButton, onDraw);
-					onDraw = false;
-					_this.player.registerWinnings(handData.payout);
-				});
-			} else {
-				dealButton.disabled = true;
-				resetGame();
-				_this.deck = new POKER.Deck();
-				_this.hand = new POKER.Hand(_this.deck.deal(FIVE_CARD_DRAW));
-				_this.paytable.displayBet(_this.player.currentBet)
-				.then(function(){
-					_this.hand.updateCardContainer();
-				})
-				.then(function(){
-					var ha = new POKER.HandAnalyzer(_this.hand.cards);
-					var handmade = ha.evaluate();
-					displayHandResults(handmade, dealButton, onDraw);
-					onDraw = true;
-					dealButton.disabled = false;
-				});
-			}
-
-		}
-	}
-
-
-
-	function setupGameContainer(config){
+	function start(config){
+		_this.config = config;
 		var gameContainer = document.getElementById(config['board']);
 		var componentContainer = createComponentContainer();
-
 		var cardContainer = createCardDisplay();
-
 		gameContainer.appendChild(componentContainer);
-		_this.paytable = new POKER.PayTable(config, componentContainer);
+		_this.paytable = new POKER.PayTable(config, componentContainer, _this);
 		componentContainer.appendChild(cardContainer);
 		_this.player = new POKER.Player(config, componentContainer, _this.paytable);
-
-		POKER.UI['cardContainer'] = cardContainer;
-		var buttonBar = document.getElementById('button-bar');
-		var dealButton = buttonBar.lastElementChild;
-		addDealEventListener(dealButton);
 	}
 
 	return {
