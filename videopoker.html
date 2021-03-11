@@ -4,9 +4,12 @@
 			<link rel="stylesheet" href="poker.css">
 		</head>
 		<body>
-			<div id="game-container">
-			<script src="videopoker.js">
+			<div id="videopoker">
+			<script src="videopoker.js"></script>
+			<script>
+				POKER.Game.start({
+					board:'videopoker'
+				});
 			</script>
-			<script>POKER.Game.start({board:'game-container'});</script>
 		</body>
 	</html>

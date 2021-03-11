@@ -66,7 +66,6 @@ POKER.Deck = POKER.Deck || (function() {
 				_this.deck[j] = tmp;
 			}
 		}
-
 		function display(){
 			for(var i = 0; i < _this.deck.length; i++){
 				console.log(_this.deck[i].suit + ' ' + _this.deck[i].value)
@@ -376,6 +375,7 @@ POKER.Payout = POKER.Payout || (function(){
 POKER.PayTable = POKER.PayTable || (function(){
 	 MAX_COLUMN = 6;
 	 START_COLUMN = 1;
+	 BET_TO_COL_OFFSET = 1;
 	 PAYTABLE_HANDINDEX = {
 	 	"ROYAL FLUSH": 0,
 	 	"STRAIGHT FLUSH": 1,
@@ -431,7 +431,8 @@ POKER.PayTable = POKER.PayTable || (function(){
 
 		this.displayBet = async function(bet, decrementCredits){
 			// Clear last column from last hand
-			colorPaytableColumn(MAX_COLUMN, 'rgb(20,42,79)');
+			var COLUMN_INDEX = bet + BET_TO_COL_OFFSET;
+			colorPaytableColumn(COLUMN_INDEX, 'rgb(20,42,79)');
 
 			var startCol = 2;
 			for(var i = startCol; i < startCol + bet; i++){
@@ -445,6 +446,8 @@ POKER.PayTable = POKER.PayTable || (function(){
 			colorPaytableColumn(START_COLUMN + bet, 'red');
 			if(bet > 1){
 				colorPaytableColumn(START_COLUMN + bet - 1, 'rgb(20,42,79)')
+			} else {
+				colorPaytableColumn(MAX_COLUMN, 'rgb(20,42,79)')
 			}
 		}
 
@@ -507,7 +510,7 @@ POKER.PayTable = POKER.PayTable || (function(){
 POKER.Player = POKER.Player || (function(){
 
 	DEFAULT_CREDITS = 100;
-	DEFAULT_BET = 1;
+	DEFAULT_BET = 0;
 	MAX_BET = 5;
 
 
@@ -526,7 +529,7 @@ POKER.Player = POKER.Player || (function(){
 			{label: "MORE GAMES", id: 'more-games-button', action: null},
 			{label: "LOG", id: 'log-button', action: null},
 			{label: "BET ONE", id: 'bet-one-button', action: handleBetIncrease},
-			{label: "BET MAX", id: 'bet-max-button', action: null},
+			{label: "BET MAX", id: 'bet-max-button', action: handleMaxBet},
 			{label: "DEAL", id: 'deal-button', action: playGame}
 		]
 
@@ -576,9 +579,19 @@ POKER.Player = POKER.Player || (function(){
 			_this.betLabel.onclick = handleBetIncrease;
 		}
 
+		function handleMaxBet(){
+			_this.currentBet = MAX_BET;
+			_this.betLabel.innerHTML = _this.currentBet;
+			playGame();
+		}
+
 		function handleBetIncrease(){
 			if(_this.currentBet < MAX_BET){
 				_this.currentBet += 1;
+				_this.betLabel.innerHTML = _this.currentBet;
+				_this.paytable.increaseBet(_this.currentBet);
+			} else {
+				_this.currentBet = 1;
 				_this.betLabel.innerHTML = _this.currentBet;
 				_this.paytable.increaseBet(_this.currentBet);
 			}
@@ -592,6 +605,11 @@ POKER.Player = POKER.Player || (function(){
 		}
 
 		this.placeBet = async function(){
+			// Case where player selects draw without betting 
+			if(_this.currentBet === 0){
+				_this.currentBet = 1;
+				_this.paytable.increaseBet(_this.currentBet);
+			} 
 			_this.credits -= _this.currentBet;
 			await _this.paytable.displayBet(_this.currentBet, decrementCreditLabel);
 		}
@@ -662,7 +680,6 @@ POKER.Player = POKER.Player || (function(){
 
 		function playGame(){
 			if(!onDraw){
-				console.log('Drawing...');
 				resetGame();
 				_this.deck = new POKER.Deck(_this.config);
 				_this.hand = new POKER.Hand(_this.config, _this.deck.deal(5));
